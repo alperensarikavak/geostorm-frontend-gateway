@@ -315,9 +315,10 @@ export default function Dashboard() {
     try {
       const apiUrl =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1/insight";
-      const targetUrl = apiUrl.endsWith("/api/v1/insight")
-        ? apiUrl
-        : `${apiUrl.replace(/\/$/, "")}/api/v1/insight`;
+      const normalizedApiUrl = apiUrl.replace(/\/$/, "");
+      const targetUrl = normalizedApiUrl.endsWith("/api/v1/insight")
+        ? normalizedApiUrl
+        : `${normalizedApiUrl}/api/v1/insight`;
       const res = await axios.post<InsightResult>(targetUrl, { prompt });
       setResult(res.data);
       toast.success("Analiz başarıyla tamamlandı.");
