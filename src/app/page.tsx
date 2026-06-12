@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent, ReactNode, ComponentType } from "react";
 import axios from "axios";
 import { Input } from "@/components/ui/input";
@@ -28,8 +28,17 @@ import {
 } from "lucide-react";
 
 type InsightResult = {
-  summary?: string;
-  queue_status?: string;
+  analysis_id?: string;
+  summary: string;
+  risk_level: string;
+  context: TelemetryContext;
+  mcp_transport?: "grpc" | "http";
+  alert_published: boolean;
+  queue_status: {
+    published: boolean;
+    message: string;
+  };
+  timestamp: string;
 };
 
 type TelemetryContext = {
@@ -62,12 +71,10 @@ type ParsedResult = {
   peakFlux: string;
 };
 
-const TELEMETRY_MARKER = "Telemetry context:";
-
 const pipelineSteps: PipelineStep[] = [
   {
     label: "Data Ingestion",
-    value: "NASA & NOAA (via Stdio MCP Server)",
+    value: "NASA & NOAA (via MCP HTTP Service)",
     icon: Satellite,
   },
   {
@@ -95,66 +102,6 @@ function cleanText(value: unknown): string {
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .trim();
-}
-
-function sliceFirstJsonObject(value: string): string | null {
-  const firstBrace = value.indexOf("{");
-  if (firstBrace === -1) return null;
-
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let index = firstBrace; index < value.length; index += 1) {
-    const char = value.charAt(index);
-
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (char === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
-
-    if (char === "{") depth += 1;
-    if (char === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        return value.slice(firstBrace, index + 1);
-      }
-    }
-  }
-  return null;
-}
-
-function extractTelemetry(summary: string): TelemetryContext | null {
-  const markerIndex = summary.indexOf(TELEMETRY_MARKER);
-  if (markerIndex === -1) return null;
-
-  const jsonCandidate = sliceFirstJsonObject(summary.slice(markerIndex));
-  if (!jsonCandidate) return null;
-
-  try {
-    const parsed = JSON.parse(jsonCandidate);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as TelemetryContext;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function extractDisplaySummary(summary: string): string {
-  const markerIndex = summary.indexOf(TELEMETRY_MARKER);
-  const withoutTelemetry = markerIndex === -1 ? summary : summary.slice(0, markerIndex);
-  return cleanText(withoutTelemetry);
 }
 
 function getNoaaAlerts(telemetry: TelemetryContext | null): NoaaAlert[] {
@@ -192,13 +139,14 @@ function walkStrings(value: unknown, collector: string[] = []): string[] {
   return collector;
 }
 
-function detectRisk(summary: string, telemetry: TelemetryContext | null) {
+function detectRisk(summary: string, telemetry: TelemetryContext | null, riskLevel: string) {
   const haystack = `${summary} ${walkStrings(telemetry).join(" ")}`.toUpperCase();
-  const critical = haystack.includes("G3") || haystack.includes("CRITICAL") || haystack.includes("ALERT") || haystack.includes("GEOMAGNETIC STORM");
+  const normalizedRisk = riskLevel.toUpperCase();
+  const critical = ["G3", "G4", "G5", "CRITICAL"].includes(normalizedRisk) || haystack.includes("GEOMAGNETIC STORM");
 
   return {
     critical,
-    label: critical ? "CRITICAL RISK (G3)" : "STABLE / NOMINAL",
+    label: riskLevel ? `RISK ${normalizedRisk}` : "RISK UNKNOWN",
     description: critical
       ? "Storm-class anomaly detected in live space telemetry."
       : "No elevated anomaly markers detected.",
@@ -240,14 +188,14 @@ function parseResult(result: InsightResult | null): ParsedResult | null {
   if (!result) return null;
 
   const summary = result.summary ?? "";
-  const telemetry = extractTelemetry(summary);
+  const telemetry = result.context ?? null;
   const alerts = getNoaaAlerts(telemetry);
 
   return {
-    cleanSummary: extractDisplaySummary(summary),
+    cleanSummary: cleanText(summary),
     telemetry,
     alerts,
-    risk: detectRisk(summary, telemetry),
+    risk: detectRisk(summary, telemetry, result.risk_level),
     station: extractStation(telemetry, summary),
     peakFlux: extractPeakFlux(telemetry, summary),
   };
@@ -296,14 +244,9 @@ export default function Dashboard() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<InsightResult | null>(null);
-  const [hydrated, setHydrated] = useState(false);
 
   const parsedResult = useMemo(() => parseResult(result), [result]);
-  const submitDisabled = hydrated ? loading || !prompt.trim() : false;
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
+  const submitDisabled = loading || !prompt.trim();
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -313,13 +256,7 @@ export default function Dashboard() {
     setResult(null);
 
     try {
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1/insight";
-      const normalizedApiUrl = apiUrl.replace(/\/$/, "");
-      const targetUrl = normalizedApiUrl.endsWith("/api/v1/insight")
-        ? normalizedApiUrl
-        : `${normalizedApiUrl}/api/v1/insight`;
-      const res = await axios.post<InsightResult>(targetUrl, { prompt });
+      const res = await axios.post<InsightResult>("/api/analyze", { prompt });
       setResult(res.data);
       toast.success("Analiz başarıyla tamamlandı.");
     } catch (error: unknown) {
@@ -455,7 +392,7 @@ export default function Dashboard() {
                       {result?.queue_status && (
                         <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200">
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          {cleanText(result.queue_status)}
+                          {cleanText(result.queue_status.message)}
                         </span>
                       )}
                     </div>

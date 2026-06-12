@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
+
+const REQUEST_TIMEOUT_MS = 65_000;
+
+type AnalyzeRequest = {
+  prompt?: unknown;
+};
 
 export async function POST(req: Request) {
   try {
-    const { prompt } = await req.json();
+    const body = (await req.json()) as AnalyzeRequest;
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
 
     if (!prompt) {
       return NextResponse.json(
@@ -14,21 +21,53 @@ export async function POST(req: Request) {
 
     // Call the Python FastAPI service
     const fastapiUrl = process.env.FASTAPI_URL || "http://localhost:8000/api/v1/insight";
-    
+
     const response = await axios.post(fastapiUrl, {
       prompt,
+    }, {
+      timeout: REQUEST_TIMEOUT_MS,
     });
 
     return NextResponse.json(response.data);
-  } catch (error: any) {
-    console.error("API Gateway Error:", error.message);
-    
+  } catch (error: unknown) {
+    const normalizedError = normalizeGatewayError(error);
+    console.error("API Gateway Error:", normalizedError.message);
+
     return NextResponse.json(
-      { 
-        error: "FastAPI servisine ulaşılamadı veya bir hata oluştu.",
-        details: error.response?.data || error.message
+      {
+        error: "FastAPI service could not be reached or returned an error.",
+        details: normalizedError.details,
       },
-      { status: error.response?.status || 500 }
+      { status: normalizedError.status }
     );
   }
+}
+
+function normalizeGatewayError(error: unknown): {
+  status: number;
+  message: string;
+  details: unknown;
+} {
+  if (axios.isAxiosError(error)) {
+    const axiosError = error as AxiosError;
+    return {
+      status: axiosError.response?.status || 502,
+      message: axiosError.message,
+      details: axiosError.response?.data || axiosError.message,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      status: 500,
+      message: error.message,
+      details: error.message,
+    };
+  }
+
+  return {
+    status: 500,
+    message: "Unknown gateway error.",
+    details: "Unknown gateway error.",
+  };
 }
