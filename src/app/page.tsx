@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { FormEvent, ReactNode, ComponentType } from "react";
 import axios from "axios";
 import { Input } from "@/components/ui/input";
@@ -429,6 +430,35 @@ function MetricCard({
 }
 
 export default function Dashboard() {
+  const router = useRouter();
+  const [user, setUser] = useState<string | null>(null);
+
+  useEffect(() => {
+    axios.get("/api/auth/me")
+      .then((res) => {
+        if (res.data.authenticated) {
+          setUser(res.data.username || "admin");
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch user session", err);
+      });
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await axios.post("/api/auth/logout");
+      toast.success("Logging out from gateway...");
+      setTimeout(() => {
+        router.push("/login");
+        router.refresh();
+      }, 500);
+    } catch (err) {
+      console.error("Logout failed", err);
+      toast.error("Logout request failed.");
+    }
+  };
+
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<InsightResult | null>(null);
@@ -518,9 +548,23 @@ export default function Dashboard() {
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 lg:px-8 relative z-10">
         <header className="grid gap-6 border-b border-slate-800/80 pb-6 lg:grid-cols-[1fr_minmax(380px,520px)] lg:items-end">
           <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-950/40 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.15)]">
-              <Satellite className="h-3.5 w-3.5 animate-pulse text-cyan-400" />
-              GeoStorm-AI Operations Console v1.2
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-950/40 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.15)]">
+                <Satellite className="h-3.5 w-3.5 animate-pulse text-cyan-400" />
+                GeoStorm-AI Operations Console v1.2
+              </div>
+              {user && (
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-850 bg-slate-900/60 px-3.5 py-1 text-[10px] font-mono text-slate-400 shadow-[0_0_10px_rgba(0,0,0,0.3)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>OPERATOR: {user}</span>
+                  <button 
+                    onClick={handleLogout} 
+                    className="ml-1.5 px-2 py-0.5 text-cyan-400 hover:text-cyan-300 hover:bg-slate-800/80 rounded transition-all font-bold uppercase cursor-pointer"
+                  >
+                    [LOGOUT]
+                  </button>
+                </div>
+              )}
             </div>
             <div>
               <h1 className="text-3xl font-extrabold tracking-tight text-slate-50 md:text-4xl bg-gradient-to-r from-slate-50 via-slate-100 to-cyan-300 bg-clip-text text-transparent">
