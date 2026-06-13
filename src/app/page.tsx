@@ -51,6 +51,10 @@ type InsightResult = {
 type TelemetryContext = {
   noaa_swpc_alerts?: unknown;
   nasa_donki_cmes?: unknown;
+  esa_source_status?: unknown;
+  esa_dataset_id?: unknown;
+  esa_error?: unknown;
+  esa_summary?: unknown;
   [key: string]: unknown;
 };
 
@@ -67,7 +71,7 @@ type PipelineStep = {
 const pipelineSteps: PipelineStep[] = [
   {
     label: "Data Ingestion",
-    value: "NASA & NOAA (via MCP gRPC Space Data Service)",
+    value: "NASA, NOAA & optional ESA SWE/HAPI (via MCP gRPC Space Data Service)",
     icon: Satellite,
   },
   {
@@ -190,6 +194,24 @@ function readAlertField(alert: NoaaAlert, keys: string[]): string {
   return "";
 }
 
+function getEsaProviderStatus(telemetry: TelemetryContext | null) {
+  const summary =
+    telemetry?.esa_summary && typeof telemetry.esa_summary === "object"
+      ? (telemetry.esa_summary as Record<string, unknown>)
+      : {};
+  const status = cleanText(telemetry?.esa_source_status || summary.status || "disabled");
+  const dataset = cleanText(telemetry?.esa_dataset_id || summary.dataset_id || "");
+  const error = cleanText(telemetry?.esa_error || summary.error || "");
+  const normalized = status || "disabled";
+
+  return {
+    status: normalized,
+    dataset: dataset || "Not configured",
+    error,
+    active: normalized === "ok",
+  };
+}
+
 // Get alert body text
 function getAlertBody(alert: NoaaAlert): string {
   return readAlertField(alert, ["message", "body", "text", "description"]);
@@ -215,6 +237,7 @@ function parseResult(result: InsightResult | null): ParsedResult | null {
     risk: detectRisk(result),
     station: extractStation(telemetry, summary),
     peakFlux: extractPeakFlux(telemetry, summary),
+    esaProvider: getEsaProviderStatus(telemetry),
   };
 }
 
@@ -232,6 +255,12 @@ type ParsedResult = {
   };
   station: string;
   peakFlux: string;
+  esaProvider: {
+    status: string;
+    dataset: string;
+    error: string;
+    active: boolean;
+  };
 };
 
 const standbyResult: ParsedResult = {
@@ -247,7 +276,13 @@ const standbyResult: ParsedResult = {
     basis: "monitoring"
   },
   station: "GOES-18",
-  peakFlux: "2,874 pfu"
+  peakFlux: "2,874 pfu",
+  esaProvider: {
+    status: "disabled",
+    dataset: "Not configured",
+    error: "",
+    active: false,
+  }
 };
 
 // Animated Space Telemetry Radar Component
@@ -844,6 +879,45 @@ export default function Dashboard() {
                         ? "Structured telemetry context parsed successfully via Model Context Protocol gRPC bindings."
                         : "Structured telemetry was unavailable; summary fallback is active."}
                     </p>
+                  </CardContent>
+                </Card>
+
+                {/* ESA provider state */}
+                <Card className="border-slate-800/80 bg-slate-900/50 backdrop-blur-md">
+                  <CardContent className="p-5">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={
+                          displayResult.esaProvider.active
+                            ? "rounded-lg border border-emerald-500/20 bg-emerald-950/20 p-2 text-emerald-400"
+                            : "rounded-lg border border-slate-800 bg-slate-950/40 p-2 text-slate-500"
+                        }
+                      >
+                        <Satellite className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">
+                          ESA SWE/HAPI Provider
+                        </p>
+                        <p
+                          className={
+                            displayResult.esaProvider.active
+                              ? "mt-1 text-sm font-bold text-emerald-300"
+                              : "mt-1 text-sm font-bold text-slate-300"
+                          }
+                        >
+                          {displayResult.esaProvider.status.toUpperCase()}
+                        </p>
+                        <p className="mt-1 break-words text-xs leading-relaxed text-slate-400">
+                          Dataset: {displayResult.esaProvider.dataset}
+                        </p>
+                        {displayResult.esaProvider.error && (
+                          <p className="mt-2 break-words text-xs leading-relaxed text-amber-300">
+                            {displayResult.esaProvider.error}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </aside>
