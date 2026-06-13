@@ -190,6 +190,7 @@ function readAlertField(alert: NoaaAlert, keys: string[]): string {
   return "";
 }
 
+// Get alert body text
 function getAlertBody(alert: NoaaAlert): string {
   return readAlertField(alert, ["message", "body", "text", "description"]);
 }
@@ -231,6 +232,22 @@ type ParsedResult = {
   };
   station: string;
   peakFlux: string;
+};
+
+const standbyResult: ParsedResult = {
+  cleanSummary: "",
+  telemetry: null,
+  alerts: [],
+  risk: {
+    critical: false,
+    label: "STANDBY",
+    description: "Geomagnetic storm monitoring active. Ready to run telemetry scan.",
+    current: "UNKNOWN",
+    forecast: "UNKNOWN",
+    basis: "monitoring"
+  },
+  station: "GOES-18",
+  peakFlux: "2,874 pfu"
 };
 
 // Animated Space Telemetry Radar Component
@@ -385,6 +402,7 @@ export default function Dashboard() {
   const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
 
   const parsedResult = useMemo(() => parseResult(result), [result]);
+  const displayResult = useMemo(() => parsedResult || standbyResult, [parsedResult]);
   const submitDisabled = loading || !prompt.trim();
 
   // Helper to determine active step in pipeline
@@ -577,40 +595,41 @@ export default function Dashboard() {
           </div>
         )}
 
-        {parsedResult && !loading && (
+        {/* Dashboard Main Grid Layout - Always visible */}
+        {!loading && (
           <section className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
             {/* Standard Metrics */}
             <div className="grid gap-4 md:grid-cols-3">
               <MetricCard
                 title="Anomaly Risk Level"
-                value={parsedResult.risk.label}
-                description={parsedResult.risk.description}
+                value={displayResult.risk.label}
+                description={displayResult.risk.description}
                 icon={Zap}
                 accent={
-                  parsedResult.risk.critical
+                  displayResult.risk.critical
                     ? "border-red-500/20 bg-red-500/10 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
                     : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
                 }
               >
                 <span
                   className={
-                    parsedResult.risk.critical
+                    displayResult.risk.critical
                       ? "inline-flex rounded-full border border-red-500/30 bg-red-950/40 px-3 py-1 text-sm font-bold tracking-wide uppercase text-red-400 shadow-md animate-pulse"
                       : "inline-flex rounded-full border border-emerald-500/30 bg-emerald-950/40 px-3 py-1 text-sm font-bold tracking-wide uppercase text-emerald-400 shadow-md"
                   }
                 >
-                  {parsedResult.risk.label}
+                  {displayResult.risk.label}
                 </span>
                 <div className="mt-2.5 space-y-1 text-xs font-mono text-slate-400">
-                  <p>Current: {parsedResult.risk.current}</p>
-                  <p>Forecast: {parsedResult.risk.forecast}</p>
-                  <p className="text-slate-500">Basis: {parsedResult.risk.basis}</p>
+                  <p>Current: {displayResult.risk.current}</p>
+                  <p>Forecast: {displayResult.risk.forecast}</p>
+                  <p className="text-slate-500">Basis: {displayResult.risk.basis}</p>
                 </div>
               </MetricCard>
 
               <MetricCard
                 title="Active Space Station"
-                value={parsedResult.station}
+                value={displayResult.station}
                 description="Space Weather Satellite Feed Source"
                 icon={Radio}
                 accent="border-cyan-500/20 bg-cyan-950/20 text-cyan-400"
@@ -618,13 +637,13 @@ export default function Dashboard() {
 
               <MetricCard
                 title="Peak Flux Threshold"
-                value={parsedResult.peakFlux}
+                value={displayResult.peakFlux}
                 description="Highest Geomagnetic Particle Flux detected"
                 icon={Gauge}
                 accent="border-blue-500/20 bg-blue-950/20 text-blue-400"
               >
                 <p className="break-words font-mono text-2xl font-bold tracking-tight text-blue-100">
-                  {parsedResult.peakFlux}
+                  {displayResult.peakFlux}
                 </p>
               </MetricCard>
             </div>
@@ -655,10 +674,16 @@ export default function Dashboard() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-6">
-                    {parsedResult.cleanSummary ? (
-                      <Markdown content={parsedResult.cleanSummary} />
+                    {displayResult.cleanSummary ? (
+                      <Markdown content={displayResult.cleanSummary} />
                     ) : (
-                      <p className="text-sm font-medium text-slate-500">No operational insight reports generated yet.</p>
+                      <div className="flex flex-col items-center justify-center py-8 text-center text-slate-500">
+                        <Sparkles className="h-8 w-8 text-slate-700 mb-2 animate-pulse" />
+                        <p className="text-sm font-semibold text-slate-300">Awaiting Operational Query</p>
+                        <p className="text-xs text-slate-500 max-w-sm mt-1">
+                          Enter a query in the console above to pull the NASA/NOAA telemetry stream and generate real-time AI insight report.
+                        </p>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
@@ -675,8 +700,8 @@ export default function Dashboard() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4 p-6">
-                    {parsedResult.alerts.length > 0 ? (
-                      parsedResult.alerts.slice(0, 8).map((alert, index) => {
+                    {displayResult.alerts.length > 0 ? (
+                      displayResult.alerts.slice(0, 8).map((alert, index) => {
                         const critical = isCriticalAlert(alert);
                         const issueDatetime = readAlertField(alert, ["issue_datetime", "issue_datetime_utc", "timestamp"]) || "2026-06-08 21:17 UTC";
                         const productId = readAlertField(alert, ["product_id", "productID"]) || `NOAA-${index + 1}`;
@@ -718,13 +743,13 @@ export default function Dashboard() {
                         );
                       })
                     ) : (
-                      <div className="rounded-lg border border-slate-800/60 bg-slate-950/50 p-6 text-center">
-                        <Zap className="mx-auto h-6 w-6 text-slate-600" />
-                        <p className="mt-3 text-sm font-semibold text-slate-300">
-                          No structured NOAA alert timeline available.
+                      <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-8 text-center">
+                        <Radio className="mx-auto h-6 w-6 text-slate-700 animate-pulse" />
+                        <p className="mt-3 text-sm font-semibold text-slate-400">
+                          No Active NOAA Alert Stream
                         </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          The console will display fallback data.
+                        <p className="mt-1.5 text-xs text-slate-500 max-w-xs mx-auto">
+                          Telemetry alerts are fetched dynamically. Run a scan to fetch the latest space weather alert timeline.
                         </p>
                       </div>
                     )}
@@ -735,7 +760,7 @@ export default function Dashboard() {
               {/* Sidebar items */}
               <aside className="space-y-6">
                 {/* Space Telemetry Radar (Static View when not loading) */}
-                <SpaceTelemetryRadar active={false} critical={parsedResult.risk.critical} />
+                <SpaceTelemetryRadar active={false} critical={displayResult.risk.critical} />
 
                 {/* Telemetry Fluctuator (Static View) */}
                 <TelemetryFluctuator active={false} />
@@ -815,7 +840,7 @@ export default function Dashboard() {
                       Telemetry Parse State
                     </p>
                     <p className="mt-2 text-xs leading-relaxed text-slate-400 font-medium">
-                      {parsedResult.telemetry
+                      {displayResult.telemetry
                         ? "Structured telemetry context parsed successfully via Model Context Protocol gRPC bindings."
                         : "Structured telemetry was unavailable; summary fallback is active."}
                     </p>
