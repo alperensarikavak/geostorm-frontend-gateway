@@ -546,6 +546,20 @@ export default function Dashboard() {
       <div className="absolute top-0 left-0 w-full h-[320px] bg-gradient-to-b from-cyan-950/10 via-transparent to-transparent pointer-events-none opacity-60" />
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 lg:px-8 relative z-10">
+        {user && (
+          <div className="absolute top-8 right-4 md:right-6 lg:right-8 z-20">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-850 bg-slate-900/80 px-3.5 py-1 text-[10px] font-mono text-slate-400 shadow-[0_0_15px_rgba(0,0,0,0.5)] backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>OPERATOR: {user}</span>
+              <button 
+                onClick={handleLogout} 
+                className="ml-1.5 px-2 py-0.5 text-cyan-400 hover:text-cyan-300 hover:bg-slate-800/80 rounded transition-all font-bold uppercase cursor-pointer"
+              >
+                [LOGOUT]
+              </button>
+            </div>
+          </div>
+        )}
         <header className="grid gap-6 border-b border-slate-800/80 pb-6 lg:grid-cols-[1fr_minmax(380px,520px)] lg:items-end">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -553,18 +567,6 @@ export default function Dashboard() {
                 <Satellite className="h-3.5 w-3.5 animate-pulse text-cyan-400" />
                 GeoStorm-AI Operations Console v1.2
               </div>
-              {user && (
-                <div className="inline-flex items-center gap-2 rounded-full border border-slate-850 bg-slate-900/60 px-3.5 py-1 text-[10px] font-mono text-slate-400 shadow-[0_0_10px_rgba(0,0,0,0.3)]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>OPERATOR: {user}</span>
-                  <button 
-                    onClick={handleLogout} 
-                    className="ml-1.5 px-2 py-0.5 text-cyan-400 hover:text-cyan-300 hover:bg-slate-800/80 rounded transition-all font-bold uppercase cursor-pointer"
-                  >
-                    [LOGOUT]
-                  </button>
-                </div>
-              )}
             </div>
             <div>
               <h1 className="text-3xl font-extrabold tracking-tight text-slate-50 md:text-4xl bg-gradient-to-r from-slate-50 via-slate-100 to-cyan-300 bg-clip-text text-transparent">
