@@ -278,6 +278,7 @@ export default function Dashboard() {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (loading) return;
     if (!prompt.trim()) return;
 
     setLoading(true);
@@ -317,23 +318,30 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="rounded-xl border border-slate-800 bg-slate-900/80 p-2 shadow-2xl shadow-slate-950/30">
+          <form
+            onSubmit={handleSubmit}
+            aria-busy={loading}
+            className="rounded-xl border border-slate-800 bg-slate-900/80 p-2 shadow-2xl shadow-slate-950/30"
+          >
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 type="text"
                 placeholder="Ask about current geomagnetic or particle flux risk..."
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                className="h-11 border-slate-700 bg-slate-950/60 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:ring-cyan-500/30"
+                className="h-11 border-slate-700 bg-slate-950/60 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:ring-cyan-500/30 disabled:border-cyan-400/40 disabled:bg-slate-900 disabled:text-slate-400 disabled:opacity-70 disabled:shadow-inner"
                 disabled={loading}
               />
               <button
                 type="submit"
                 disabled={submitDisabled}
-                className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-cyan-500 px-4 text-sm font-medium whitespace-nowrap text-slate-950 transition-all hover:bg-cyan-400 disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-cyan-500 px-4 text-sm font-medium whitespace-nowrap text-slate-950 transition-all hover:bg-cyan-400 disabled:cursor-not-allowed disabled:border-cyan-300/50 disabled:bg-cyan-300/70 disabled:opacity-90 disabled:ring-2 disabled:ring-cyan-300/30"
               >
                 {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
                 ) : (
                   <>
                     <Sparkles className="mr-1 h-4 w-4" />
@@ -342,17 +350,29 @@ export default function Dashboard() {
                 )}
               </button>
             </div>
+            {loading && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="mt-2 flex items-start gap-2 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-xs leading-5 text-cyan-100 shadow-inner shadow-cyan-950/20"
+              >
+                <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-cyan-300" />
+                <span>
+                  Analyzing NASA/NOAA telemetry via MCP gRPC service. This may take 10-30 seconds...
+                </span>
+              </div>
+            )}
           </form>
         </header>
 
         {loading && (
-          <Card className="border-slate-800 bg-slate-900/60">
+          <Card role="status" aria-live="polite" className="border-slate-800 bg-slate-900/60">
             <CardContent className="flex flex-col items-center justify-center gap-4 py-14">
               <div className="relative">
                 <div className="h-12 w-12 rounded-full border-4 border-slate-800" />
                 <div className="absolute left-0 top-0 h-12 w-12 animate-spin rounded-full border-4 border-cyan-400 border-t-transparent" />
               </div>
-              <p className="text-sm text-slate-400">AI modeli telemetri akışını inceliyor...</p>
+              <p className="text-sm text-slate-400">Analyzing telemetry stream...</p>
             </CardContent>
           </Card>
         )}
