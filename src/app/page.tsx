@@ -74,7 +74,7 @@ type ParsedResult = {
 const pipelineSteps: PipelineStep[] = [
   {
     label: "Data Ingestion",
-    value: "NASA & NOAA (via MCP HTTP Service)",
+    value: "NASA & NOAA (via MCP gRPC Space Data Service)",
     icon: Satellite,
   },
   {
