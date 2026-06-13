@@ -31,6 +31,9 @@ type InsightResult = {
   analysis_id?: string;
   summary: string;
   risk_level: string;
+  current_risk_level?: string;
+  forecast_risk_level?: string;
+  risk_basis?: string;
   context: TelemetryContext;
   mcp_transport?: "grpc" | "http";
   alert_published: boolean;
@@ -66,6 +69,9 @@ type ParsedResult = {
     critical: boolean;
     label: string;
     description: string;
+    current: string;
+    forecast: string;
+    basis: string;
   };
   station: string;
   peakFlux: string;
@@ -139,18 +145,40 @@ function walkStrings(value: unknown, collector: string[] = []): string[] {
   return collector;
 }
 
-function detectRisk(summary: string, telemetry: TelemetryContext | null, riskLevel: string) {
-  const haystack = `${summary} ${walkStrings(telemetry).join(" ")}`.toUpperCase();
-  const normalizedRisk = riskLevel.toUpperCase();
-  const critical = ["G3", "G4", "G5", "CRITICAL"].includes(normalizedRisk) || haystack.includes("GEOMAGNETIC STORM");
+function detectRisk(result: InsightResult) {
+  const normalizedRisk = normalizeRiskLevel(result.risk_level);
+  const current = normalizeRiskLevel(result.current_risk_level);
+  const forecast = normalizeRiskLevel(result.forecast_risk_level);
+  const critical = ["G3", "G4", "G5", "CRITICAL"].includes(normalizedRisk);
 
   return {
     critical,
-    label: riskLevel ? `RISK ${normalizedRisk}` : "RISK UNKNOWN",
-    description: critical
-      ? "Storm-class anomaly detected in live space telemetry."
-      : "No elevated anomaly markers detected.",
+    label: `RISK ${normalizedRisk}`,
+    description: riskDescription(normalizedRisk),
+    current,
+    forecast,
+    basis: result.risk_basis || "highest_current_or_forecast",
   };
+}
+
+function normalizeRiskLevel(value?: string): string {
+  const normalized = (value || "UNKNOWN").toUpperCase();
+  return /^(G[0-5]|CRITICAL|UNKNOWN)$/.test(normalized) ? normalized : "UNKNOWN";
+}
+
+function riskDescription(riskLevel: string): string {
+  const descriptions: Record<string, string> = {
+    G0: "Below geomagnetic storm levels.",
+    G1: "Minor geomagnetic storm risk.",
+    G2: "Moderate actionable geomagnetic risk.",
+    G3: "Strong storm-class anomaly risk.",
+    G4: "Severe storm-class anomaly risk.",
+    G5: "Extreme storm-class anomaly risk.",
+    CRITICAL: "Critical anomaly risk.",
+    UNKNOWN: "Risk classification unavailable.",
+  };
+
+  return descriptions[riskLevel] || descriptions.UNKNOWN;
 }
 
 function extractStation(telemetry: TelemetryContext | null, summary: string) {
@@ -195,7 +223,7 @@ function parseResult(result: InsightResult | null): ParsedResult | null {
     cleanSummary: cleanText(summary),
     telemetry,
     alerts,
-    risk: detectRisk(summary, telemetry, result.risk_level),
+    risk: detectRisk(result),
     station: extractStation(telemetry, summary),
     peakFlux: extractPeakFlux(telemetry, summary),
   };
@@ -352,6 +380,11 @@ export default function Dashboard() {
                 >
                   {parsedResult.risk.label}
                 </span>
+                <div className="mt-2 space-y-1 text-xs leading-5 text-slate-300">
+                  <p>Current: {parsedResult.risk.current}</p>
+                  <p>Forecast: {parsedResult.risk.forecast}</p>
+                  <p className="text-slate-500">Basis: {parsedResult.risk.basis}</p>
+                </div>
               </MetricCard>
 
               <MetricCard
